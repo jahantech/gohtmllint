@@ -5,9 +5,24 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"path/filepath"
 	"regexp"
 )
 
+var (
+	Tag       *regexp.Regexp
+	InlineTag *regexp.Regexp
+	CloseTag  *regexp.Regexp
+)
+
+func init() {
+
+	Tag, _ = regexp.Compile("<.*?>")
+
+	InlineTag, _ = regexp.Compile(`<.*?(\/\s*|\/)>`)
+
+	CloseTag, _ = regexp.Compile(`<\/.*?>`)
+}
 func main() {
 
 	if len(os.Args) != 2 {
@@ -35,9 +50,6 @@ func BasicHtmlTagChecker(Check_File_Folder string, HTMLOnly bool) {
 	}
 	defer fdir.Close()
 
-	Tag, err := regexp.Compile("<.*?>")
-
-	CloseTag, _ := regexp.Compile(`<\/.*?>`)
 	fileinfo, err := fdir.Stat()
 
 	if err != nil {
@@ -48,12 +60,15 @@ func BasicHtmlTagChecker(Check_File_Folder string, HTMLOnly bool) {
 
 	switch mode := fileinfo.Mode(); {
 	case mode.IsDir():
+		filepath.Walk(Check_File_Folder, HTMLCheck)
 		return
 	case mode.IsRegular():
 		content, err := ioutil.ReadFile(Check_File_Folder)
 
 		if err != nil {
+			fmt.Println(Check_File_Folder)
 			fmt.Println("Unable to read the file")
+			fmt.Println(err)
 			return
 		}
 		opentags := 0
@@ -65,6 +80,8 @@ func BasicHtmlTagChecker(Check_File_Folder string, HTMLOnly bool) {
 				fmt.Println("Closing Tag: " + v)
 				opentags = opentags + 1
 
+			} else if InlineTag.Match([]byte(v)) {
+				fmt.Println("Inline tag: " + v)
 			} else {
 				fmt.Println("Opening Tag: " + v)
 				closedtags = closedtags + 1
@@ -78,4 +95,46 @@ func BasicHtmlTagChecker(Check_File_Folder string, HTMLOnly bool) {
 		}
 		return
 	}
+}
+
+func HTMLCheck(path string, info os.FileInfo, err error) error {
+
+	if info.IsDir() {
+		return nil
+	}
+	content, err := ioutil.ReadFile(path)
+
+	if err != nil {
+		fmt.Println("Unable to read the file")
+		fmt.Println(err)
+		fmt.Println(path)
+		return err
+	}
+	opentags := 0
+	closedtags := 0
+	AllTags := Tag.FindAllString(string(content), -1)
+	for _, v := range AllTags {
+
+		if CloseTag.Match([]byte(v)) {
+			fmt.Println("Closing Tag: " + v)
+			opentags = opentags + 1
+
+		} else if InlineTag.Match([]byte(v)) {
+			fmt.Println("Inline tag: " + v)
+		} else {
+			fmt.Println("Opening Tag: " + v)
+			closedtags = closedtags + 1
+		}
+	}
+
+	if closedtags == opentags {
+		fmt.Println("Passed: " + path)
+
+		fmt.Println("")
+	} else {
+		fmt.Println("Failed - Count mismatch: " + path)
+		fmt.Println("")
+	}
+
+	return nil
 }
