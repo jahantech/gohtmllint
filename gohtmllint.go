@@ -10,9 +10,12 @@ import (
 )
 
 var (
-	Tag       *regexp.Regexp
-	InlineTag *regexp.Regexp
-	CloseTag  *regexp.Regexp
+	Tag         *regexp.Regexp
+	InlineTag   *regexp.Regexp
+	CloseTag    *regexp.Regexp
+	ScriptTags  *regexp.Regexp
+	DocTypeTags *regexp.Regexp
+	LinkTags    *regexp.Regexp
 )
 
 func init() {
@@ -22,6 +25,10 @@ func init() {
 	InlineTag, _ = regexp.Compile(`<.*?(\/\s*|\/)>`)
 
 	CloseTag, _ = regexp.Compile(`<\/.*?>`)
+
+	ScriptTags, _ = regexp.Compile(`<script[^<]*</script>`)
+	DocTypeTags, _ = regexp.Compile(`<!DOCTYPE[^>[]*(\[[^]]*\])?>`)
+	LinkTags, _ = regexp.Compile(`<link[^>[]*(\[[^]]*\])?>`)
 }
 func main() {
 
@@ -29,11 +36,13 @@ func main() {
 		fmt.Println("No Arguments specified")
 		fmt.Println("Usage (Files): gohtmllint test.html")
 		fmt.Println("Usage (Folder): gohtmllint TestDir")
+		fmt.Println("Usage HTML bool: gohtmllint TestDir")
 		return
 	}
 	Check_File_Folder := os.Args[1]
 
 	HTMLOnly := flag.Bool("HTMLOnly", true, "Set this to false if you want to scan all the files")
+
 	BasicHtmlTagChecker(Check_File_Folder, *HTMLOnly)
 }
 
@@ -73,7 +82,11 @@ func BasicHtmlTagChecker(Check_File_Folder string, HTMLOnly bool) {
 		}
 		opentags := 0
 		closedtags := 0
-		AllTags := Tag.FindAllString(string(content), -1)
+
+		NewContent := ScriptTags.ReplaceAll(content, []byte(""))
+		NewContent = DocTypeTags.ReplaceAll(NewContent, []byte(""))
+		NewContent = LinkTags.ReplaceAll(NewContent, []byte(""))
+		AllTags := Tag.FindAllString(string(NewContent), -1)
 		for _, v := range AllTags {
 
 			if CloseTag.Match([]byte(v)) {
@@ -112,7 +125,11 @@ func HTMLCheck(path string, info os.FileInfo, err error) error {
 	}
 	opentags := 0
 	closedtags := 0
-	AllTags := Tag.FindAllString(string(content), -1)
+	NewContent := ScriptTags.ReplaceAll(content, []byte(""))
+	NewContent = DocTypeTags.ReplaceAll(NewContent, []byte(""))
+	NewContent = LinkTags.ReplaceAll(NewContent, []byte(""))
+	AllTags := Tag.FindAllString(string(NewContent), -1)
+
 	for _, v := range AllTags {
 
 		if CloseTag.Match([]byte(v)) {
@@ -133,7 +150,9 @@ func HTMLCheck(path string, info os.FileInfo, err error) error {
 		fmt.Println("")
 	} else {
 		fmt.Println("Failed - Count mismatch: " + path)
-		fmt.Println("")
+		fmt.Println("Open Tags: ", opentags)
+		fmt.Println("Close Tags: ", closedtags)
+
 	}
 
 	return nil
